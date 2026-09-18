@@ -90,7 +90,7 @@
         <a class="title" href="/read/{{ a.id }}" target="_blank" rel="noopener">{{ a.title }}</a>
         <p class="meta">
           <span class="source">{{ a.source_name }}</span>
-          {% if a.published_at %}<span class="date">{{ a.published_at.strftime('%Y-%m-%d') }}</span>{% endif %}
+          {% if a.published_at %}<span class="date">{{ a.published_at|jst('%Y-%m-%d') }}</span>{% endif %}
           {% if a.is_read %}<span class="read-badge">既読</span>{% endif %}
           {% if a.is_bookmarked %}<span class="bookmark-badge" title="ブックマーク済み">★ ブックマーク</span>{% endif %}
         </p>

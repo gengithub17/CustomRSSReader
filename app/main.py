@@ -31,6 +31,19 @@ app = FastAPI(title="CustomRSSReader")
 app.mount("/static", StaticFiles(directory="app/static"), name="static")
 templates = Jinja2Templates(directory="app/templates")
 
+JST = dt.timezone(dt.timedelta(hours=9))
+
+
+def _jst(value: dt.datetime | None, fmt: str) -> str:
+    """DBに保存されているUTC(naive)datetimeをJSTの文字列に変換する。"""
+    if value is None:
+        return "-"
+    aware = value.replace(tzinfo=dt.timezone.utc) if value.tzinfo is None else value
+    return aware.astimezone(JST).strftime(fmt)
+
+
+templates.env.filters["jst"] = _jst
+
 
 def _apply_filters(stmt, sources: list[str], show: str, q: str | None, date_from: str | None, date_to: str | None):
     if sources:

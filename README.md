@@ -184,3 +184,7 @@ YAML風の記法でまとめた参考例(実際にyamlファイルへ書き込�
 ## ライセンス
 
 [MIT License](LICENSE)
+
+## クレジット
+
+このプロジェクトは [Claude Code](https://claude.com/claude-code) との対話を通じて設計・実装されました。

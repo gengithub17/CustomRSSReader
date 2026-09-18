@@ -1,0 +1,61 @@
+{% extends "base.html" %}
+{% block title %}ソース管理 - CustomRSSReader{% endblock %}
+{% block content %}
+
+<div class="toolbar">
+  <a class="chip" href="/sources/new">+ 新しいソースを追加</a>
+  <form method="post" action="/fetch-now" style="display:inline">
+    <button type="submit" class="chip">今すぐ取得</button>
+  </form>
+</div>
+
+<div class="table-scroll">
+<table class="status-table">
+  <thead>
+    <tr>
+      <th>ソース名</th>
+      <th>種類</th>
+      <th>有効</th>
+      <th>最終実行</th>
+      <th>新規件数</th>
+      <th>エラー</th>
+      <th></th>
+    </tr>
+  </thead>
+  <tbody>
+    {% for row in rows %}
+    {% set c = row.config %}
+    {% set s = row.status %}
+    <tr class="{% if s and s.last_error %}error{% endif %}">
+      <td>{{ c.name }}</td>
+      <td>{{ "RSS+フィルタ" if c.type == "rss_link_filter" else "一覧スクレイピング" }}</td>
+      <td>
+        <form method="post" action="/sources/{{ c.name|urlencode }}/toggle">
+          <button type="submit" class="chip {% if c.enabled %}active{% endif %}">
+            {{ "有効" if c.enabled else "無効" }}
+          </button>
+        </form>
+      </td>
+      <td>{{ s.last_run_at.strftime('%Y-%m-%d %H:%M UTC') if s and s.last_run_at else '-' }}</td>
+      <td>{{ s.new_items_last_run if s else '-' }}</td>
+      <td class="error-cell">{{ (s.last_error if s else None) or '-' }}</td>
+      <td>
+        <div class="row-actions">
+          <a class="chip" href="/sources/{{ c.name|urlencode }}/edit">編集</a>
+          <form method="post" action="/sources/{{ c.name|urlencode }}/delete"
+                onsubmit="return confirm('「{{ c.name }}」を削除しますか?(取得済みの記事は残ります)');">
+            <button type="submit" class="chip danger">削除</button>
+          </form>
+        </div>
+      </td>
+    </tr>
+    {% endfor %}
+  </tbody>
+</table>
+</div>
+
+{% if not rows %}
+<p class="empty">ソースが登録されていません。「新しいソースを追加」から追加してください。</p>
+{% endif %}
+
+{% endblock %}

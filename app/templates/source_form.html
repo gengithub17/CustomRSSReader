@@ -1,0 +1,145 @@
+{% extends "base.html" %}
+{% block title %}{{ "ソース編集" if row else "ソース追加" }} - CustomRSSReader{% endblock %}
+{% block content %}
+
+<h1 class="page-title">{{ "ソース編集: " ~ row.name if row else "新しいソースを追加" }}</h1>
+
+{% if error %}<p class="form-error">{{ error }}</p>{% endif %}
+
+<form id="source-form" method="post" action="{{ ('/sources/' ~ (row.name|urlencode) ~ '/edit') if row else '/sources/new' }}">
+  <div class="form-row">
+    <label>ソース名</label>
+    <input type="text" name="name" value="{{ row.name if row else '' }}" {% if row %}readonly{% endif %} required>
+  </div>
+
+  <div class="form-row">
+    <label>有効</label>
+    <label class="checkbox-label"><input type="checkbox" name="enabled" {% if not row or row.enabled %}checked{% endif %}> 有効にする</label>
+  </div>
+
+  <div class="form-row">
+    <label>取得方式</label>
+    <select name="type" id="type-select">
+      <option value="rss_link_filter" {% if row and row.type == 'rss_link_filter' %}selected{% endif %}>RSS + リンク/カテゴリでフィルタ</option>
+      <option value="html_listing" {% if row and row.type == 'html_listing' %}selected{% endif %}>一覧ページを直接スクレイピング(RSSなし)</option>
+    </select>
+  </div>
+
+  <div class="form-row">
+    <label>base_url</label>
+    <input type="text" name="base_url" value="{{ row.base_url if row else '' }}" placeholder="https://example.com">
+  </div>
+
+  <fieldset id="fieldset-rss">
+    <legend>RSS + フィルタ設定</legend>
+    <div class="form-row">
+      <label>feed_url</label>
+      <input type="text" name="feed_url" value="{{ row.feed_url or '' if row else '' }}" placeholder="https://example.com/feed/">
+    </div>
+    <div class="form-row">
+      <label>include_path_prefixes<br><span class="hint">記事URLのパスがこれで始まれば採用(1行1件)</span></label>
+      <textarea name="include_path_prefixes" rows="3" placeholder="/category-slug/">{{ row.include_path_prefixes or '' if row else '' }}</textarea>
+    </div>
+    <div class="form-row">
+      <label>include_categories<br><span class="hint">RSSの&lt;category&gt;タグがこれに一致すれば採用(1行1件)</span></label>
+      <textarea name="include_categories" rows="3">{{ row.include_categories or '' if row else '' }}</textarea>
+    </div>
+  </fieldset>
+
+  <fieldset id="fieldset-html">
+    <legend>一覧ページスクレイピング設定</legend>
+    <div class="form-row">
+      <label>list_url_template<br><span class="hint">{page} は0始まりのページ番号に置換される</span></label>
+      <input type="text" name="list_url_template" value="{{ row.list_url_template or '' if row else '' }}"
+             placeholder="https://example.com/blog?category=1&page={page}">
+    </div>
+    <div class="form-row">
+      <label>max_pages</label>
+      <input type="number" name="max_pages" min="1" value="{{ row.max_pages if row else 1 }}">
+    </div>
+    <div class="form-row">
+      <label>打ち切り</label>
+      <label class="checkbox-label">
+        <input type="checkbox" name="stop_when_no_new_items" {% if not row or row.stop_when_no_new_items %}checked{% endif %}>
+        既知の記事に到達したらページ取得を打ち切る
+      </label>
+    </div>
+    <div class="form-row">
+      <label>selectors.item</label>
+      <input type="text" name="selector_item" value="{{ row.selector_item or '' if row else '' }}" placeholder="article.card">
+    </div>
+    <div class="form-row">
+      <label>selectors.link</label>
+      <input type="text" name="selector_link" value="{{ row.selector_link or '' if row else '' }}" placeholder="h2 a">
+    </div>
+    <div class="form-row">
+      <label>selectors.title</label>
+      <input type="text" name="selector_title" value="{{ row.selector_title or '' if row else '' }}" placeholder="h2 a">
+    </div>
+    <div class="form-row">
+      <label>selectors.date(省略可)</label>
+      <input type="text" name="selector_date" value="{{ row.selector_date or '' if row else '' }}" placeholder=".date span">
+    </div>
+    <div class="form-row">
+      <label>selectors.date_format(省略可)</label>
+      <input type="text" name="selector_date_format" value="{{ row.selector_date_format or '' if row else '' }}" placeholder="%B %d, %Y">
+    </div>
+    <div class="form-row">
+      <label>selectors.summary(省略可)</label>
+      <input type="text" name="selector_summary" value="{{ row.selector_summary or '' if row else '' }}" placeholder=".summary">
+    </div>
+    <div class="form-row">
+      <label>selectors.image(省略可)</label>
+      <input type="text" name="selector_image" value="{{ row.selector_image or '' if row else '' }}" placeholder="img">
+    </div>
+  </fieldset>
+
+  <fieldset>
+    <legend>要約(重要文抽出)用</legend>
+    <div class="form-row">
+      <label>content_selector<br><span class="hint">記事本文ページの本文コンテナ。省略時は自動推定を試みる</span></label>
+      <input type="text" name="content_selector" value="{{ row.content_selector or '' if row else '' }}" placeholder=".article-body">
+    </div>
+  </fieldset>
+
+  <div class="form-actions">
+    <button type="button" id="test-fetch-btn" class="chip">この設定でテスト取得</button>
+    <button type="submit" class="chip primary">保存</button>
+    <a class="chip" href="/sources">キャンセル</a>
+  </div>
+</form>
+
+<div id="test-result"></div>
+
+<script>
+const typeSelect = document.getElementById("type-select");
+const fieldsetRss = document.getElementById("fieldset-rss");
+const fieldsetHtml = document.getElementById("fieldset-html");
+
+function syncFieldsets() {
+  const isHtml = typeSelect.value === "html_listing";
+  fieldsetRss.hidden = isHtml;
+  fieldsetHtml.hidden = !isHtml;
+}
+typeSelect.addEventListener("change", syncFieldsets);
+syncFieldsets();
+
+document.getElementById("test-fetch-btn").addEventListener("click", async () => {
+  const form = document.getElementById("source-form");
+  const resultBox = document.getElementById("test-result");
+  resultBox.textContent = "取得を試しています...";
+
+  const res = await fetch("/sources/test", { method: "POST", body: new FormData(form) });
+  const data = await res.json();
+
+  if (!data.ok) {
+    resultBox.innerHTML = `<p class="test-error">エラー: ${data.error}</p>`;
+    return;
+  }
+
+  const items = data.sample.map((i) => `<li><a href="${i.link}" target="_blank" rel="noopener">${i.title}</a></li>`).join("");
+  resultBox.innerHTML = `<p>合計 ${data.total} 件マッチ(先頭${data.sample.length}件を表示)</p><ul>${items}</ul>`;
+});
+</script>
+
+{% endblock %}

@@ -1,0 +1,422 @@
+{% extends "base.html" %}
+{% block title %}記事一覧 - CustomRSSReader{% endblock %}
+{% block content %}
+
+<div class="sticky-bar">
+  <div class="sticky-row">
+    <button type="button" id="toggle-filters" class="chip">フィルタ・検索 ▾</button>
+    <p class="unread-count">未読: {{ unread_total }}件</p>
+  </div>
+  <div class="sticky-row">
+    <label class="checkbox-label"><input type="checkbox" id="select-all"> 全選択</label>
+    <select id="bulk-action-select" class="chip-select">
+      <option value="">選択中の記事の操作...</option>
+      <option value="mark-read">既読にする</option>
+      <option value="mark-unread">未読にする</option>
+      <option value="bookmark">ブックマークする</option>
+      <option value="unbookmark">ブックマーク解除</option>
+      <option value="open">新しいタブで開く</option>
+      <option value="copy-ai">AI要約用にコピー</option>
+    </select>
+    <button type="button" id="bulk-action-run" class="chip primary">実行</button>
+  </div>
+  <div class="sticky-row">
+    <button type="button" id="copy-for-ai" class="chip">未読の記事をAI要約用にコピー</button>
+    <form method="post" action="/mark-all-read" style="display:inline">
+      {% for s in current_sources %}<input type="hidden" name="source" value="{{ s }}">{% endfor %}
+      <input type="hidden" name="show" value="{{ show }}">
+      <input type="hidden" name="q" value="{{ q }}">
+      <input type="hidden" name="date_from" value="{{ date_from }}">
+      <input type="hidden" name="date_to" value="{{ date_to }}">
+      <button type="submit" class="chip">表示中の記事を既読にする</button>
+    </form>
+  </div>
+</div>
+
+<div id="filter-panel">
+  <form class="filter-form" method="get" action="/">
+    <fieldset>
+      <legend>ソース(複数選択可)</legend>
+      <div class="checkbox-grid">
+        {% for s in sources %}
+        <label class="checkbox-label">
+          <input type="checkbox" name="source" value="{{ s }}" {% if s in current_sources %}checked{% endif %}>
+          {{ s }}
+        </label>
+        {% endfor %}
+      </div>
+      <div class="source-select-actions">
+        <button type="button" id="source-select-all" class="chip">すべて選択</button>
+        <button type="button" id="source-select-none" class="chip">すべて解除</button>
+      </div>
+    </fieldset>
+
+    <fieldset>
+      <legend>表示</legend>
+      <div class="radio-row">
+        <label class="checkbox-label"><input type="radio" name="show" value="unread" {% if show == 'unread' %}checked{% endif %}> 未読のみ</label>
+        <label class="checkbox-label"><input type="radio" name="show" value="read" {% if show == 'read' %}checked{% endif %}> 既読のみ</label>
+        <label class="checkbox-label"><input type="radio" name="show" value="bookmarked" {% if show == 'bookmarked' %}checked{% endif %}> ブックマークのみ</label>
+        <label class="checkbox-label"><input type="radio" name="show" value="all" {% if show == 'all' %}checked{% endif %}> すべて</label>
+      </div>
+    </fieldset>
+
+    <div class="search-form">
+      <input type="search" name="q" value="{{ q }}" placeholder="キーワード検索(タイトル・要約・重要文)">
+      <label>期間 <input type="date" name="date_from" value="{{ date_from }}"></label>
+      <label>〜 <input type="date" name="date_to" value="{{ date_to }}"></label>
+    </div>
+
+    <div class="form-actions">
+      <button type="submit" class="chip primary">絞り込む</button>
+      <a class="chip" href="/">クリア</a>
+    </div>
+  </form>
+</div>
+
+{% if not articles %}
+  <p class="empty">記事がありません。まだ取得中か、条件に一致する記事がありません。</p>
+{% endif %}
+
+<ul class="article-list">
+  {% for a in articles %}
+  <li class="article {% if a.is_read %}read{% endif %} {% if a.is_bookmarked %}bookmarked{% endif %}" data-link="{{ a.link }}" data-id="{{ a.id }}">
+    <div class="article-main">
+      <input type="checkbox" class="article-select" value="{{ a.id }}">
+      {% if a.image_url %}
+        <img class="thumb" src="{{ a.image_url }}" alt="" loading="lazy">
+      {% endif %}
+      <div class="article-body">
+        <a class="title" href="/read/{{ a.id }}" target="_blank" rel="noopener">{{ a.title }}</a>
+        <p class="meta">
+          <span class="source">{{ a.source_name }}</span>
+          {% if a.published_at %}<span class="date">{{ a.published_at.strftime('%Y-%m-%d') }}</span>{% endif %}
+          {% if a.is_read %}<span class="read-badge">既読</span>{% endif %}
+          {% if a.is_bookmarked %}<span class="bookmark-badge" title="ブックマーク済み">★ ブックマーク</span>{% endif %}
+        </p>
+        {% if a.key_sentences %}
+        <ul class="key-sentences">
+          {% for s in a.key_sentences.split('\n') %}
+          <li>{{ s }}</li>
+          {% endfor %}
+        </ul>
+        {% elif a.summary %}
+          <p class="summary">{{ a.summary }}</p>
+        {% endif %}
+      </div>
+    </div>
+    <div class="article-actions">
+      <button type="button" class="mark-read-btn" data-article-id="{{ a.id }}" data-read="{{ '0' if a.is_read else '1' }}">
+        {{ "未読にする" if a.is_read else "既読にする" }}
+      </button>
+      <button type="button" class="bookmark-btn" data-article-id="{{ a.id }}" data-bookmarked="{{ '0' if a.is_bookmarked else '1' }}">
+        {{ "ブックマーク解除" if a.is_bookmarked else "ブックマークする" }}
+      </button>
+    </div>
+  </li>
+  {% endfor %}
+</ul>
+
+<div id="ai-copy-modal" hidden>
+  <div class="modal-box">
+    <p>クリップボードにコピーできませんでした。下のテキストを選択してコピーしてください。</p>
+    <textarea id="ai-copy-text" readonly></textarea>
+    <button type="button" id="ai-copy-close" class="chip">閉じる</button>
+  </div>
+</div>
+
+<script>
+const currentShow = "{{ show }}";
+const UNDO_GRACE_MS = 3000;
+const FILTER_STATE_KEY = "customrss_filter_expanded";
+
+(function setupFilterToggle() {
+  const panel = document.getElementById("filter-panel");
+  const btn = document.getElementById("toggle-filters");
+
+  let expanded = true;
+  try {
+    const saved = localStorage.getItem(FILTER_STATE_KEY);
+    if (saved !== null) expanded = saved === "1";
+  } catch (e) { /* localStorageが使えない環境ではデフォルト(展開)のまま */ }
+
+  function apply() {
+    panel.hidden = !expanded;
+    btn.textContent = expanded ? "フィルタ・検索 ▲" : "フィルタ・検索 ▾";
+  }
+  apply();
+
+  btn.addEventListener("click", () => {
+    expanded = !expanded;
+    apply();
+    try { localStorage.setItem(FILTER_STATE_KEY, expanded ? "1" : "0"); } catch (e) {}
+  });
+})();
+
+async function setRead(ids, read) {
+  const res = await fetch("/mark-bulk", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ ids, read }),
+  });
+  return res.ok;
+}
+
+// 現在の表示フィルタ(未読のみ/既読のみ/すべて)のもとで、
+// read状態に変えた記事が一覧から消えるべきかどうか
+function willDisappear(read) {
+  if (currentShow === "unread") return read === true;
+  if (currentShow === "read") return read === false;
+  return false;
+}
+
+function refreshArticleUI(li, read) {
+  li.classList.toggle("read", read);
+  const meta = li.querySelector(".meta");
+  let badge = meta.querySelector(".read-badge");
+  if (read && !badge) {
+    badge = document.createElement("span");
+    badge.className = "read-badge";
+    badge.textContent = "既読";
+    meta.appendChild(badge);
+  } else if (!read && badge) {
+    badge.remove();
+  }
+}
+
+function setButtonToggleMode(btn, read) {
+  btn.dataset.mode = "toggle";
+  btn.dataset.read = read ? "0" : "1";
+  btn.textContent = read ? "未読にする" : "既読にする";
+}
+
+// 一覧から消える変更の場合は、3秒間は薄く表示したまま残し、
+// その間はボタンが「元に戻す」になる(誤操作の復元用)
+function applyReadVisual(li, btn, read) {
+  refreshArticleUI(li, read);
+  clearTimeout(Number(btn.dataset.timerId || 0));
+
+  if (!willDisappear(read)) {
+    li.classList.remove("pending-remove");
+    setButtonToggleMode(btn, read);
+    return;
+  }
+
+  li.classList.add("pending-remove");
+  btn.dataset.mode = "undo";
+  btn.dataset.pendingRead = read ? "1" : "0";
+  btn.textContent = "元に戻す";
+  const timerId = window.setTimeout(() => { li.remove(); }, UNDO_GRACE_MS);
+  btn.dataset.timerId = String(timerId);
+}
+
+async function onMarkButtonClick(btn) {
+  const li = btn.closest("li");
+  const id = Number(li.dataset.id);
+
+  if (btn.dataset.mode === "undo") {
+    clearTimeout(Number(btn.dataset.timerId || 0));
+    const revertTo = btn.dataset.pendingRead !== "1";
+    await setRead([id], revertTo);
+    applyReadVisual(li, btn, revertTo);
+    return;
+  }
+
+  const read = btn.dataset.read === "1";
+  await setRead([id], read);
+  applyReadVisual(li, btn, read);
+}
+
+document.querySelectorAll(".mark-read-btn").forEach((btn) => {
+  btn.dataset.mode = "toggle";
+  btn.addEventListener("click", () => onMarkButtonClick(btn));
+});
+
+async function setBookmark(ids, bookmarked) {
+  const res = await fetch("/bookmark-bulk", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ ids, bookmarked }),
+  });
+  return res.ok;
+}
+
+// 現在の表示フィルタが「ブックマークのみ」のとき、解除した記事は一覧から消える
+function willDisappearBookmark(bookmarked) {
+  return currentShow === "bookmarked" && bookmarked === false;
+}
+
+function refreshBookmarkUI(li, bookmarked) {
+  li.classList.toggle("bookmarked", bookmarked);
+  const meta = li.querySelector(".meta");
+  let badge = meta.querySelector(".bookmark-badge");
+  if (bookmarked && !badge) {
+    badge = document.createElement("span");
+    badge.className = "bookmark-badge";
+    badge.title = "ブックマーク済み";
+    badge.textContent = "★ ブックマーク";
+    meta.appendChild(badge);
+  } else if (!bookmarked && badge) {
+    badge.remove();
+  }
+}
+
+function setBookmarkButtonToggleMode(btn, bookmarked) {
+  btn.dataset.mode = "toggle";
+  btn.dataset.bookmarked = bookmarked ? "0" : "1";
+  btn.textContent = bookmarked ? "ブックマーク解除" : "ブックマークする";
+}
+
+function applyBookmarkVisual(li, btn, bookmarked) {
+  refreshBookmarkUI(li, bookmarked);
+  clearTimeout(Number(btn.dataset.timerId || 0));
+
+  if (!willDisappearBookmark(bookmarked)) {
+    li.classList.remove("pending-remove");
+    setBookmarkButtonToggleMode(btn, bookmarked);
+    return;
+  }
+
+  li.classList.add("pending-remove");
+  btn.dataset.mode = "undo";
+  btn.dataset.pendingBookmarked = bookmarked ? "1" : "0";
+  btn.textContent = "元に戻す";
+  const timerId = window.setTimeout(() => { li.remove(); }, UNDO_GRACE_MS);
+  btn.dataset.timerId = String(timerId);
+}
+
+async function onBookmarkButtonClick(btn) {
+  const li = btn.closest("li");
+  const id = Number(li.dataset.id);
+
+  if (btn.dataset.mode === "undo") {
+    clearTimeout(Number(btn.dataset.timerId || 0));
+    const revertTo = btn.dataset.pendingBookmarked !== "1";
+    await setBookmark([id], revertTo);
+    applyBookmarkVisual(li, btn, revertTo);
+    return;
+  }
+
+  const bookmarked = btn.dataset.bookmarked === "1";
+  await setBookmark([id], bookmarked);
+  applyBookmarkVisual(li, btn, bookmarked);
+}
+
+document.querySelectorAll(".bookmark-btn").forEach((btn) => {
+  btn.dataset.mode = "toggle";
+  btn.addEventListener("click", () => onBookmarkButtonClick(btn));
+});
+
+// チェックボックス・リンク・ボタン以外をクリックしたら、その記事のチェックを切り替える
+document.querySelectorAll(".article").forEach((li) => {
+  li.addEventListener("click", (e) => {
+    if (e.target.closest("a, button, input")) return;
+    const cb = li.querySelector(".article-select");
+    cb.checked = !cb.checked;
+  });
+});
+
+document.getElementById("select-all").addEventListener("change", (e) => {
+  document.querySelectorAll(".article-select").forEach((cb) => { cb.checked = e.target.checked; });
+});
+
+document.getElementById("source-select-all").addEventListener("click", () => {
+  document.querySelectorAll('input[name="source"]').forEach((cb) => { cb.checked = true; });
+});
+
+document.getElementById("source-select-none").addEventListener("click", () => {
+  document.querySelectorAll('input[name="source"]').forEach((cb) => { cb.checked = false; });
+});
+
+function selectedArticles() {
+  return [...document.querySelectorAll(".article-select:checked")].map((cb) => cb.closest("li"));
+}
+
+function buildAiText(items) {
+  const blocks = items.map((li) => {
+    const title = li.querySelector(".title")?.textContent.trim() ?? "";
+    const source = li.querySelector(".meta .source")?.textContent.trim() ?? "";
+    const link = li.dataset.link ?? "";
+    const sentences = [...li.querySelectorAll(".key-sentences li")].map((s) => `- ${s.textContent.trim()}`);
+    return [`【${source}】${title}`, ...sentences, link].join("\n");
+  });
+  return blocks.join("\n\n");
+}
+
+async function copyTextForAi(text, count) {
+  try {
+    await navigator.clipboard.writeText(text);
+    alert(`${count}件をクリップボードにコピーしました。`);
+  } catch (err) {
+    document.getElementById("ai-copy-text").value = text;
+    document.getElementById("ai-copy-modal").hidden = false;
+  }
+}
+
+const bulkActions = {
+  "mark-read": (items) => {
+    setRead(items.map((li) => Number(li.dataset.id)), true).then(() => {
+      items.forEach((li) => applyReadVisual(li, li.querySelector(".mark-read-btn"), true));
+    });
+  },
+  "mark-unread": (items) => {
+    setRead(items.map((li) => Number(li.dataset.id)), false).then(() => {
+      items.forEach((li) => applyReadVisual(li, li.querySelector(".mark-read-btn"), false));
+    });
+  },
+  "bookmark": (items) => {
+    setBookmark(items.map((li) => Number(li.dataset.id)), true).then(() => {
+      items.forEach((li) => applyBookmarkVisual(li, li.querySelector(".bookmark-btn"), true));
+    });
+  },
+  "unbookmark": (items) => {
+    setBookmark(items.map((li) => Number(li.dataset.id)), false).then(() => {
+      items.forEach((li) => applyBookmarkVisual(li, li.querySelector(".bookmark-btn"), false));
+    });
+  },
+  "open": (items) => {
+    let blocked = 0;
+    items.forEach((li) => {
+      const w = window.open(li.dataset.link, "_blank");
+      if (w) {
+        w.opener = null;
+      } else {
+        blocked++;
+      }
+    });
+    if (blocked > 0) {
+      alert(`${blocked}件がブラウザのポップアップブロックにより開けませんでした。アドレスバー付近のポップアップブロック表示から、このサイトのポップアップを許可してからもう一度お試しください。`);
+    }
+  },
+  "copy-ai": (items) => {
+    copyTextForAi(buildAiText(items), items.length);
+  },
+};
+
+document.getElementById("bulk-action-run").addEventListener("click", () => {
+  const select = document.getElementById("bulk-action-select");
+  const action = select.value;
+  if (!action) { alert("操作を選択してください。"); return; }
+
+  const items = selectedArticles();
+  if (items.length === 0) { alert("記事が選択されていません。"); return; }
+
+  bulkActions[action](items);
+  select.value = "";
+});
+
+document.getElementById("copy-for-ai").addEventListener("click", () => {
+  const items = [...document.querySelectorAll(".article-list .article:not(.read)")];
+  if (items.length === 0) {
+    alert("未読の記事がありません。");
+    return;
+  }
+  copyTextForAi(buildAiText(items), items.length);
+});
+
+document.getElementById("ai-copy-close").addEventListener("click", () => {
+  document.getElementById("ai-copy-modal").hidden = true;
+});
+</script>
+
+{% endblock %}

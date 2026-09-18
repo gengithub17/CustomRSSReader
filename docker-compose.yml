@@ -1,0 +1,17 @@
+services:
+  customrss:
+    build: .
+    container_name: customrss
+    restart: unless-stopped
+    ports:
+      - "8000:8000"
+    volumes:
+      - ./data:/app/data
+    environment:
+      - DB_PATH=/app/data/customrss.db
+      - FETCH_INTERVAL_MINUTES=30
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8000/healthz')"]
+      interval: 30s
+      timeout: 5s
+      retries: 3

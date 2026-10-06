@@ -1,5 +1,6 @@
 {% extends "base.html" %}
 {% block title %}ソース管理 - CustomRSSReader{% endblock %}
+{% block head_extra %}{% if fetching %}<meta http-equiv="refresh" content="5">{% endif %}{% endblock %}
 {% block content %}
 
 <div class="toolbar">
@@ -7,6 +8,7 @@
   <form method="post" action="/fetch-now" style="display:inline">
     <button type="submit" class="chip">今すぐ取得</button>
   </form>
+  {% if fetching %}<span class="unread-count">取得処理を実行中です(完了まで自動で更新されます)</span>{% endif %}
 </div>
 
 <div class="table-scroll">
@@ -36,7 +38,10 @@
           </button>
         </form>
       </td>
-      <td>{{ (s.last_run_at if s else None)|jst('%Y-%m-%d %H:%M JST') }}</td>
+      <td>
+        {% if c.name in running %}<span class="unread-count">取得中…</span>
+        {% else %}{{ (s.last_run_at if s else None)|jst('%Y-%m-%d %H:%M JST') }}{% endif %}
+      </td>
       <td>{{ s.new_items_last_run if s else '-' }}</td>
       <td class="error-cell">{{ (s.last_error if s else None) or '-' }}</td>
       <td>

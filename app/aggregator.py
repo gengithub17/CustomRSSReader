@@ -15,6 +15,9 @@ from app.summarize import summarize_article
 
 logger = logging.getLogger("customrss.aggregator")
 
+running_sources: set[str] = set()
+active_fetch_runs = 0
+
 
 def _known_links_for(session, source_name: str) -> set[str]:
     rows = session.execute(
@@ -24,6 +27,14 @@ def _known_links_for(session, source_name: str) -> set[str]:
 
 
 def fetch_source(source: Source) -> int:
+    running_sources.add(source.name)
+    try:
+        return _fetch_source(source)
+    finally:
+        running_sources.discard(source.name)
+
+
+def _fetch_source(source: Source) -> int:
     """1つのソースを取得しDBへ反映する。戻り値は新規追加件数。"""
     session = SessionLocal()
     new_count = 0
@@ -104,13 +115,18 @@ def test_fetch(source: Source, limit: int = 5) -> tuple[list, int]:
 
 
 def fetch_all() -> dict[str, int]:
-    session = SessionLocal()
+    global active_fetch_runs
+    active_fetch_runs += 1
     try:
-        sources = list_enabled_sources(session)
-    finally:
-        session.close()
+        session = SessionLocal()
+        try:
+            sources = list_enabled_sources(session)
+        finally:
+            session.close()
 
-    results: dict[str, int] = {}
-    for source in sources:
-        results[source.name] = fetch_source(source)
-    return results
+        results: dict[str, int] = {}
+        for source in sources:
+            results[source.name] = fetch_source(source)
+        return results
+    finally:
+        active_fetch_runs -= 1

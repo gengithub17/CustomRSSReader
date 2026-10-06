@@ -12,7 +12,8 @@ from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 from sqlalchemy import select, update
 
-from app.aggregator import fetch_all, test_fetch
+from app import aggregator
+from app.aggregator import fetch_all, running_sources, test_fetch
 from app.db import SessionLocal, init_db
 from app.models import Article, SourceStatus
 from app.scheduler import start as start_scheduler
@@ -233,7 +234,13 @@ def sources_status(request: Request):
         statuses = {s.name: s for s in session.execute(select(SourceStatus)).scalars()}
         rows = [{"config": c, "status": statuses.get(c.name)} for c in configs]
         return templates.TemplateResponse(
-            "sources.html", {"request": request, "rows": rows}
+            "sources.html",
+            {
+                "request": request,
+                "rows": rows,
+                "running": set(running_sources),
+                "fetching": aggregator.active_fetch_runs > 0,
+            },
         )
     finally:
         session.close()

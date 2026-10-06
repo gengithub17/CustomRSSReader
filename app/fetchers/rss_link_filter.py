@@ -27,7 +27,8 @@ def _matches(entry, source: Source) -> bool:
 
 
 def fetch(source: Source) -> list[FetchedItem]:
-    assert source.feed_url
+    if not source.feed_url:
+        raise ValueError("feed_url が未入力です")
     resp = httpx.get(
         source.feed_url,
         headers={"User-Agent": USER_AGENT},

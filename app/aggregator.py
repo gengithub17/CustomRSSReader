@@ -84,7 +84,7 @@ def fetch_source(source: Source) -> int:
             status = SourceStatus(name=source.name)
             session.add(status)
         status.last_run_at = dt.datetime.now(dt.timezone.utc)
-        status.last_error = str(exc)
+        status.last_error = str(exc) or type(exc).__name__
         session.commit()
         logger.exception("failed to fetch %s", source.name)
         return 0

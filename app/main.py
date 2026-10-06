@@ -337,7 +337,7 @@ async def source_test(request: Request):
             }
         )
     except Exception as exc:  # noqa: BLE001
-        return JSONResponse({"ok": False, "error": str(exc)})
+        return JSONResponse({"ok": False, "error": str(exc) or type(exc).__name__})
 
 
 @app.post("/fetch-now")

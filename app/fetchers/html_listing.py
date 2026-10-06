@@ -64,8 +64,10 @@ def _parse_card(card, source: Source) -> FetchedItem | None:
 
 
 def fetch(source: Source, known_links: set[str] | None = None) -> list[FetchedItem]:
-    assert source.list_url_template
-    assert source.selectors is not None
+    if not source.list_url_template:
+        raise ValueError("一覧ページURL(list_url_template)が未入力です")
+    if source.selectors is None or not (source.selectors.item and source.selectors.link and source.selectors.title):
+        raise ValueError("記事カード・リンク・タイトルのセレクタ(item / link / title)は必須です")
     known_links = known_links or set()
 
     items: list[FetchedItem] = []
